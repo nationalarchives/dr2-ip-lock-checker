@@ -25,14 +25,14 @@ class Website:
 
 def get_response(request, url: str) -> int | Exception:
     try:
-        response: BaseHTTPResponse = request("GET", url, timeout = urllib3.Timeout(5), retries = False)
+        response: BaseHTTPResponse = request("GET", url, timeout=urllib3.Timeout(5), retries=False)
         return response.status
     except Exception as e:
         return e
 
 
 def verify_responses(website_to_test_expected_responses: dict[str, Website],
-                     request = http.request) -> dict[str, Website]:
+                     request=http.request) -> dict[str, Website]:
     for website in website_to_test_expected_responses.values():
         expected_response = website.expected_response
 
@@ -56,7 +56,7 @@ def verify_responses(website_to_test_expected_responses: dict[str, Website],
     return website_to_test_expected_responses
 
 
-def print_error_message(websites: dict[str, Website], print_error = print):
+def print_error_message(websites: dict[str, Website], print_error=print):
     for website_name, website in websites.items():
         error_message_in_json = {
             "Status": "Failure",
@@ -69,7 +69,7 @@ def print_error_message(websites: dict[str, Website], print_error = print):
         print_error(error_message_in_json)
 
 
-def print_success_message(preservica_website: Website, print_error = print):
+def print_success_message(preservica_website: Website, print_error=print):
     success_message_in_json = {
         "Status": "Success",
         "Website": f"{preservica_website.name}",
@@ -94,7 +94,7 @@ def get_websites_with_errors(preservica_website: Website, rest_of_the_tested_web
         return {preservica_website.name: preservica_website}
 
 
-def lambda_handler(verify_responses_func = verify_responses, print_error_message_func=print_error_message,
+def lambda_handler(verify_responses_func=verify_responses, print_error_message_func=print_error_message,
                    print_success_message_func=print_success_message):
     preservica_website_name = "Preservica"
     websites_to_test_for_expected_responses: dict[str, Website] = {
@@ -114,7 +114,8 @@ def lambda_handler(verify_responses_func = verify_responses, print_error_message
     tested_websites_with_responses: dict[str, Website] = verify_responses_func(websites_to_test_for_expected_responses)
     preservica_website: Website = tested_websites_with_responses.pop(preservica_website_name)  # this removes item
     rest_of_the_tested_websites = tested_websites_with_responses
-    websites_to_log_error_msgs_for: dict[str, Website] = get_websites_with_errors(preservica_website, rest_of_the_tested_websites)
+    websites_to_log_error_msgs_for: dict[str, Website] = get_websites_with_errors(preservica_website,
+                                                                                  rest_of_the_tested_websites)
 
     if websites_to_log_error_msgs_for:
         print_error_message_func(websites_to_log_error_msgs_for)
