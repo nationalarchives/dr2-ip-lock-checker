@@ -12,13 +12,15 @@ jobs:
     with:
       repo-name: dr2-ip-lock-checker
       artifact-name: ip-lock-checker
+      artifact-file-type: zip
+      artifact-path: .
       build-command: |
         mkdir package
         pip install --target ./package -r requirements-runtime.txt
         cd package
-        zip -r ../ip_block_checker_lambda.zip .
+        zip -r ../ip_lock_checker_lambda.zip .
         cd ..
-        zip notifications_lambda.zip lambda_function.py
+        zip ip_lock_checker_lambda.zip lambda_function.py
     secrets:
       MANAGEMENT_ACCOUNT: ${{ secrets.MANAGEMENT_ACCOUNT }}
       WORKFLOW_PAT: ${{ secrets.WORKFLOW_PAT }}
