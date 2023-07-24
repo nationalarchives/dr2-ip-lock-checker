@@ -1,5 +1,4 @@
 import os
-from typing import Dict
 
 import urllib3
 
@@ -79,8 +78,8 @@ def print_success_message(preservica_website: Website, print_error=print):
     print_error(success_message_in_json)
 
 
-def get_websites_with_errors(preservica_website: Website, rest_of_the_tested_websites: dict[str, Website]) -> dict[
-    str, Website]:
+def get_websites_with_errors(preservica_website: Website, rest_of_the_tested_websites: dict[str, Website]
+                             ) -> dict[str, Website]:
     if preservica_website.received_expected_response:
         any_other_website_received_unexpected_response = {
             website for website in rest_of_the_tested_websites.values() if not website.received_expected_response
