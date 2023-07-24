@@ -5,7 +5,7 @@ from unittest.mock import Mock
 from urllib3.exceptions import ConnectTimeoutError
 
 from lambda_function import get_response, BaseHTTPResponse, Website, verify_responses, print_error_message, \
-    get_websites_with_errors, print_success_message, lambda_handler
+    get_websites_with_errors, print_success_message, run_connection_tests
 
 
 def generate_list_of_websites():
@@ -263,7 +263,7 @@ class TestNotificationsLambda(unittest.TestCase):
 
         print_success_message_func = Mock()
 
-        lambda_handler(verify_responses_func, print_success_message_func=print_success_message_func)
+        run_connection_tests(verify_responses_func, print_success_message_func=print_success_message_func)
 
         website = print_success_message_func.call_args_list[0].args[0]
 
@@ -294,7 +294,7 @@ class TestNotificationsLambda(unittest.TestCase):
 
         print_error_message_func = Mock()
 
-        lambda_handler(verify_responses_func, print_error_message_func=print_error_message_func)
+        run_connection_tests(verify_responses_func, print_error_message_func=print_error_message_func)
 
         website = print_error_message_func.call_args_list[0].args[0]
         print(website)
@@ -330,7 +330,7 @@ class TestNotificationsLambda(unittest.TestCase):
 
         print_error_message_func = Mock()
 
-        lambda_handler(verify_responses_func, print_error_message_func=print_error_message_func)
+        run_connection_tests(verify_responses_func, print_error_message_func=print_error_message_func)
 
         website = print_error_message_func.call_args_list[0].args[0]
 

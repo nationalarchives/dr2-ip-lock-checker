@@ -93,8 +93,8 @@ def get_websites_with_errors(preservica_website: Website, rest_of_the_tested_web
         return {preservica_website.name: preservica_website}
 
 
-def lambda_handler(verify_responses_func=verify_responses, print_error_message_func=print_error_message,
-                   print_success_message_func=print_success_message):
+def run_connection_tests(verify_responses_func=verify_responses, print_error_message_func=print_error_message,
+                         print_success_message_func=print_success_message):
     preservica_website_name = "Preservica"
     websites_to_test_for_expected_responses: dict[str, Website] = {
         preservica_website_name: Website(
@@ -122,5 +122,5 @@ def lambda_handler(verify_responses_func=verify_responses, print_error_message_f
         print_success_message_func(preservica_website)
 
 
-if __name__ == "__main__":
-    lambda_handler()
+def lambda_handler(event, context):
+    run_connection_tests()
