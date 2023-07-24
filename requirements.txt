@@ -1,2 +1,1 @@
-# Load all runtime and dev packages
--r requirements-runtime.txt
+urllib3 == 1.26.16
