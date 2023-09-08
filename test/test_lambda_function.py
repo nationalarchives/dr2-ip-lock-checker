@@ -1,11 +1,14 @@
 import os
 import unittest
+import json
 from unittest.mock import Mock
-
+from moto import mock_events, mock_sqs
+import boto3
 from urllib3.exceptions import ConnectTimeoutError
 
-from lambda_function import get_response, BaseHTTPResponse, Website, verify_responses, print_error_message, \
-    get_websites_with_errors, print_success_message, run_connection_tests
+from lambda_function import get_response, BaseHTTPResponse, Website, verify_responses, \
+    send_error_messages_to_eventbridge, \
+    get_websites_with_errors, run_connection_tests
 
 
 def generate_list_of_websites():
@@ -22,13 +25,51 @@ def generate_list_of_websites():
     }
 
 
-class TestNotificationsLambda(unittest.TestCase):
+@mock_sqs
+@mock_events
+class TestIpLockChecker(unittest.TestCase):
+    events_client = boto3.client("events", region_name="eu-west-2")
+    sqs_client = boto3.client("sqs", region_name="eu-west-2")
+
+    def create_sqs_queue_and_rule(self):
+        self.events_client.put_rule(Name='test-rule', EventPattern='{"source": ["DR2DevMessage"]}')
+        attributes = {'FifoQueue': 'true', 'ContentBasedDeduplication': 'true'}
+        sqs_queue = self.sqs_client.create_queue(QueueName='test-queue.fifo', Attributes=attributes)
+        target = {'Id': 'id', 'Arn': 'arn:aws:sqs:eu-west-2:123456789012:test-queue.fifo',
+                  'SqsParameters': {'MessageGroupId': 'Test'}}
+        self.events_client.put_targets(Rule='test-rule', Targets=[target])
+        return sqs_queue['QueueUrl']
+
+    def delete_queue_messages(self, queue_url, receipt_handles):
+        for receipt_handle in receipt_handles:
+            self.sqs_client.delete_message(QueueUrl=queue_url, ReceiptHandle=receipt_handle)
+
+    def get_queue_messages(self, queue_url):
+        messages = []
+
+        def process_msg(msg):
+            return {'ReceiptHandle': msg['ReceiptHandle'], 'ErrorMessage': json.loads(msg['Body'])['detail']['message']}
+
+        msgs_response = self.sqs_client.receive_message(QueueUrl=queue_url, MaxNumberOfMessages=10)
+
+        while 'Messages' in msgs_response:
+            messages += [process_msg(msg) for msg in msgs_response['Messages']]
+            msgs_response = self.sqs_client.receive_message(QueueUrl=queue_url, MaxNumberOfMessages=10)
+
+        return messages
+
+    @staticmethod
+    def generate_expected_error_message(site_name, expected_response, actual_response):
+        return "\n".join((f":alert-noflash-slow: *IP lock check failure*: {site_name} is unexpectedly available.",
+                          f"*Expected Response*: {expected_response}",
+                          f"*Actual Response*: {actual_response}"))
+
     def test_get_response_should_return_200_status(self):
         http = Mock()
         response = BaseHTTPResponse()
         response.status = 200
         http.request = Mock(
-            return_value = response
+            return_value=response
         )
 
         http_status: int | Exception = get_response(http.request, "https://mockWebhookUrl.com")
@@ -40,7 +81,7 @@ class TestNotificationsLambda(unittest.TestCase):
 
     def test_get_response_should_return_exception(self):
         http = Mock()
-        http.request = Mock(side_effect = ConnectTimeoutError())
+        http.request = Mock(side_effect=ConnectTimeoutError())
 
         http_status: int | Exception = get_response(http.request, "https://mockWebhookUrl.com")
 
@@ -62,15 +103,15 @@ class TestNotificationsLambda(unittest.TestCase):
             "Preservica_mock_website": Website(
                 "Preservica_mock_website",
                 "https://mockPreservicaWebsite.net",
-                ConnectTimeoutError(),
+                "Connection timeout",
                 True,
-                str(ConnectTimeoutError())
+                "Connection timeout"
             ),
             "website2": Website("website2", "https://mockWebsite2.com", 200, True, "200"),
             "website3": Website("website3", "https://mockWebsite3.com", 200, True, "200")
         }
 
-        response = verify_responses(initial_list_of_websites, request = http.request)
+        response = verify_responses(initial_list_of_websites, request=http.request)
 
         for website_name in ["Preservica_mock_website", "website2", "website3"]:
             self.assertEqual(response[website_name].url, expected_website_result[website_name].url)
@@ -94,7 +135,7 @@ class TestNotificationsLambda(unittest.TestCase):
             "Preservica_mock_website": Website(
                 "Preservica_mock_website",
                 "https://mockPreservicaWebsite.net",
-                ConnectTimeoutError(),
+                "Connection timeout",
                 False,
                 str(200)
             ),
@@ -102,7 +143,7 @@ class TestNotificationsLambda(unittest.TestCase):
             "website3": Website("website3", "https://mockWebsite3.com", 200, True, "200")
         }
 
-        response = verify_responses(initial_list_of_websites, request = http.request)
+        response = verify_responses(initial_list_of_websites, request=http.request)
 
         for website_name in ["Preservica_mock_website", "website2", "website3"]:
             self.assertEqual(response[website_name].url, expected_website_result[website_name].url)
@@ -123,61 +164,34 @@ class TestNotificationsLambda(unittest.TestCase):
         initial_list_of_websites["Preservica_mock_website"].expected_response = 42.0
 
         with self.assertRaises(ValueError) as _:
-            verify_responses(initial_list_of_websites, request = http.request)
+            verify_responses(initial_list_of_websites, request=http.request)
 
-    def test_print_error_message_should_print_error_message(self):
-        mock_print = Mock()
+    def test_send_error_messages_to_eventbridge_should_send_error_message_to_eventbridge(self):
+        queue_url = self.create_sqs_queue_and_rule()
         response = BaseHTTPResponse()
         response.status = 200
 
         websites = {
             "website2": Website(
-                "website2", "https://mockWebsite2.com", 200, False, str(InterruptedError("an InterruptedError"))
+                "website2", "https://mockWebsite2.com", 200, False, "ConnectTimeoutError"
             ),
             "website3": Website(
-                "website3", "https://mockWebsite3.com", 200, False, str(InterruptedError("another InterruptedError"))
+                "website3", "https://mockWebsite3.com", 200, False, "ConnectTimeoutError"
             )
         }
 
-        print_error_message(websites, mock_print)
+        send_error_messages_to_eventbridge(websites)
 
-        expected_and_actual_responses = [("website2", "200", "an InterruptedError"), ("website3", "200",
-                                                                                      "another InterruptedError")]
+        expected_and_actual_responses = [
+            self.generate_expected_error_message("website2", "200", "ConnectTimeoutError"),
+            self.generate_expected_error_message("website3", "200", "ConnectTimeoutError")
+        ]
 
-        for n, (name, expected, actual) in enumerate(expected_and_actual_responses):
-            print(mock_print.call_args_list)
-            self.assertEqual(
-                mock_print.call_args_list[n].args[0],
-                {"Status": "Failure",
-                 "Website": name,
-                 "Message": "This address is unexpectedly available",
-                 "Expected Response": expected,
-                 "Actual Response": actual
-                 }
-            )
+        message_response = self.get_queue_messages(queue_url)
+        self.assertEqual(message_response[0]['ErrorMessage'], expected_and_actual_responses[0])
+        self.assertEqual(message_response[1]['ErrorMessage'], expected_and_actual_responses[1])
 
-    def test_print_success_message_should_print_success_message(self):
-        mock_print = Mock()
-        response = BaseHTTPResponse()
-        response.status = 200
-
-        preservica_website = Website(
-            "Preservica_mock_website",
-            "https://mockPreservicaWebsite.net",
-            ConnectTimeoutError("timeout error"),
-            True,
-            ConnectTimeoutError("")
-        )
-
-        print_success_message(preservica_website, mock_print)
-
-        self.assertEqual(
-            mock_print.call_args_list[0].args[0],
-            {"Status": "Success",
-             "Website": "Preservica_mock_website",
-             "Message": "Preservica_mock_website returned an expected response: timeout error"
-             }
-        )
+        self.delete_queue_messages(queue_url, [msg['ReceiptHandle'] for msg in message_response])
 
     def test_get_websites_with_errors_should_return_0_websites_with_errors(self):
         websites = {
@@ -242,38 +256,8 @@ class TestNotificationsLambda(unittest.TestCase):
         self.assertEqual(websites_with_errors["website2"].received_expected_response, False)
         self.assertEqual(websites_with_errors["website2"].actual_response, str(InterruptedError()))
 
-    def test_lambda_handler_should_call_print_success_message(self):
-        os.environ["PRESERVICA_URL"] = "https://mockPreservicaWebsite.net"
-
-        tested_websites_with_responses = {
-            "Preservica": Website(
-                "Preservica",
-                "https://mockPreservicaWebsite.net",
-                ConnectTimeoutError("expected response"),
-                True,
-                str(ConnectTimeoutError("expected response"))
-            ),
-            "website2": Website("website2", "https://mockWebsite2.com", 200, True, "200"),
-            "website3": Website("website3", "https://mockWebsite3.com", 200, True, "200")
-        }
-
-        verify_responses_func = Mock(
-            return_value = tested_websites_with_responses
-        )
-
-        print_success_message_func = Mock()
-
-        run_connection_tests(verify_responses_func, print_success_message_func=print_success_message_func)
-
-        website = print_success_message_func.call_args_list[0].args[0]
-
-        self.assertEqual(website.name, "Preservica")
-        self.assertEqual(website.url, "https://mockPreservicaWebsite.net")
-        self.assertEqual(str(website.expected_response), "expected response")
-        self.assertEqual(website.received_expected_response, True)
-        self.assertEqual(str(website.actual_response), "expected response")
-
-    def test_lambda_handler_should_call_print_error_message_with_preservica_website(self):
+    def test_lambda_handler_should_call_eventbridge_with_error_message_with_preservica_website(self):
+        queue_url = self.create_sqs_queue_and_rule()
         os.environ["PRESERVICA_URL"] = "https://mockPreservicaWebsite.net"
 
         tested_websites_with_responses = {
@@ -289,23 +273,20 @@ class TestNotificationsLambda(unittest.TestCase):
         }
 
         verify_responses_func = Mock(
-            return_value = tested_websites_with_responses
+            return_value=tested_websites_with_responses
         )
 
-        print_error_message_func = Mock()
+        run_connection_tests(verify_responses_func)
 
-        run_connection_tests(verify_responses_func, print_error_message_func=print_error_message_func)
+        msgs_response = self.get_queue_messages(queue_url)
 
-        website = print_error_message_func.call_args_list[0].args[0]
-        print(website)
+        self.assertEqual(len(msgs_response), 1)
+        expected_msg = self.generate_expected_error_message("Preservica", "expected response", "200")
+        self.assertEqual(msgs_response[0]['ErrorMessage'], expected_msg)
+        self.delete_queue_messages(queue_url, [msg['ReceiptHandle'] for msg in msgs_response])
 
-        self.assertEqual(website["Preservica"].name, "Preservica")
-        self.assertEqual(website["Preservica"].url, "https://mockPreservicaWebsite.net")
-        self.assertEqual(str(website["Preservica"].expected_response), "expected response")
-        self.assertEqual(website["Preservica"].received_expected_response, False)
-        self.assertEqual(str(website["Preservica"].actual_response), "200")
-
-    def test_lambda_handler_should_call_print_error_message_with_other_websites(self):
+    def test_lambda_handler_should_call_eventbridge_with_other_websites(self):
+        queue_url = self.create_sqs_queue_and_rule()
         os.environ["PRESERVICA_URL"] = "https://mockPreservicaWebsite.net"
 
         tested_websites_with_responses = {
@@ -325,21 +306,17 @@ class TestNotificationsLambda(unittest.TestCase):
         }
 
         verify_responses_func = Mock(
-            return_value = tested_websites_with_responses
+            return_value=tested_websites_with_responses
         )
 
-        print_error_message_func = Mock()
+        expected_message_one = self.generate_expected_error_message("website2", "200", "Interruption error")
+        expected_message_two = self.generate_expected_error_message("website3", "200", "Interruption error")
 
-        run_connection_tests(verify_responses_func, print_error_message_func=print_error_message_func)
+        run_connection_tests(verify_responses_func)
 
-        website = print_error_message_func.call_args_list[0].args[0]
-
-        for n in range(2, 4):
-            self.assertEqual(website[f"website{n}"].name, f"website{n}")
-            self.assertEqual(website[f"website{n}"].url, f"https://mockWebsite{n}.com")
-            self.assertEqual(str(website[f"website{n}"].expected_response), "200")
-            self.assertEqual(website[f"website{n}"].received_expected_response, False)
-            self.assertEqual(str(website[f"website{n}"].actual_response), "Interruption error")
+        message_response = self.get_queue_messages(queue_url)
+        self.assertEqual(message_response[0]['ErrorMessage'], expected_message_one)
+        self.assertEqual(message_response[1]['ErrorMessage'], expected_message_two)
 
 
 if __name__ == "__main__":
