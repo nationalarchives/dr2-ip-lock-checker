@@ -12,7 +12,7 @@ jobs:
     uses: nationalarchives/dr2-github-actions/.github/workflows/lambda_build.yml@main
     with:
       repo-name: dr2-ip-lock-checker
-      artifact-name: ip-lock-checker
+      artifact-name: ip_lock_checker_lambda
       artifact-file-type: zip
       artifact-path: .
       build-command: |

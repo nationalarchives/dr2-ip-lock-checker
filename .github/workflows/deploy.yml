@@ -22,8 +22,8 @@ jobs:
   deploy:
     uses: nationalarchives/dr2-github-actions/.github/workflows/lambda_deploy.yml@main
     with:
-      lambda-name: ip-lock-checker
-      deployment-package: ip_block_checker_lambda.zip
+      lambda-name: ${{ github.event.inputs.environment }}-ip-lock-checker
+      deployment-package: ip_lock_checker_lambda.zip
       environment: ${{ github.event.inputs.environment }}
       to-deploy: ${{ github.event.inputs.to-deploy }}
     secrets:
