@@ -28,8 +28,16 @@ def generate_list_of_websites():
 @mock_sqs
 @mock_events
 class TestIpLockChecker(unittest.TestCase):
-    events_client = boto3.client("events", region_name="eu-west-2")
-    sqs_client = boto3.client("sqs", region_name="eu-west-2")
+    events_client = boto3.client("events",
+                                 region_name="eu-west-2",
+                                 aws_access_key_id="test-access-key",
+                                 aws_secret_access_key="test-secret-key",
+                                 aws_session_token="test-session-token")
+    sqs_client = boto3.client("sqs",
+                              region_name="eu-west-2",
+                              aws_access_key_id="test-access-key",
+                              aws_secret_access_key="test-secret-key",
+                              aws_session_token="test-session-token")
 
     @staticmethod
     def set_aws_credentials():
