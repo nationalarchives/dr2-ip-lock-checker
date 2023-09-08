@@ -24,7 +24,7 @@ jobs:
         zip ip_lock_checker_lambda.zip lambda_function.py
     secrets:
       MANAGEMENT_ACCOUNT: ${{ secrets.MANAGEMENT_ACCOUNT }}
-      WORKFLOW_PAT: ${{ secrets.WORKFLOW_PAT }}
+      WORKFLOW_TOKEN: ${{ secrets.WORKFLOW_TOKEN }}
   deploy:
     needs: pre-deploy
     runs-on: ubuntu-latest
