@@ -11,7 +11,7 @@ jobs:
     uses: nationalarchives/dr2-github-actions/.github/workflows/lambda_build.yml@main
     with:
       repo-name: dr2-ip-lock-checker
-      artifact-name: ip-lock-checker
+      artifact-name: ip_lock_checker_lambda
       artifact-file-type: zip
       artifact-path: .
       build-command: |
@@ -23,7 +23,7 @@ jobs:
         zip ip_lock_checker_lambda.zip lambda_function.py
     secrets:
       MANAGEMENT_ACCOUNT: ${{ secrets.MANAGEMENT_ACCOUNT }}
-      WORKFLOW_PAT: ${{ secrets.WORKFLOW_PAT }}
+      WORKFLOW_TOKEN: ${{ secrets.WORKFLOW_TOKEN }}
   deploy:
     needs: pre-deploy
     runs-on: ubuntu-latest
@@ -31,4 +31,4 @@ jobs:
       - uses: actions/checkout@v3
       - run: gh workflow run deploy.yml -f environment=intg -f to-deploy=${{ needs.pre-deploy.outputs.next-version }}
         env:
-          GITHUB_TOKEN: ${{ secrets.WORKFLOW_PAT }}
+          GITHUB_TOKEN: ${{ secrets.WORKFLOW_TOKEN }}

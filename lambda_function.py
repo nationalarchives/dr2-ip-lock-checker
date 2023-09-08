@@ -1,10 +1,11 @@
 import os
-
+import json
 import urllib3
-
+import boto3
 from urllib3.exceptions import ConnectTimeoutError
 
 http = urllib3.PoolManager()
+client = boto3.client('events', region_name="eu-west-2")
 
 
 class BaseHTTPResponse:
@@ -37,11 +38,12 @@ def verify_responses(website_to_test_expected_responses: dict[str, Website],
 
         match expected_response:
             case ConnectTimeoutError():
+                website.expected_response = "Connection timeout"
                 http_status: int | Exception = get_response(request, website.url)
                 if type(http_status) == ConnectTimeoutError:
                     website.received_expected_response = True
-                    website.actual_response = str(website.expected_response)  # just in case there is sensitive
-                    # information in error message
+                    website.actual_response = website.expected_response
+
                 else:
                     website.received_expected_response = False
                     website.actual_response = str(http_status)
@@ -55,46 +57,33 @@ def verify_responses(website_to_test_expected_responses: dict[str, Website],
     return website_to_test_expected_responses
 
 
-def print_error_message(websites: dict[str, Website], print_error=print):
+def send_error_messages_to_eventbridge(websites: dict[str, Website]):
     for website_name, website in websites.items():
-        error_message_in_json = {
-            "Status": "Failure",
-            "Website": website_name,
-            "Message": "This address is unexpectedly available",
-            "Expected Response": str(website.expected_response),
-            "Actual Response": website.actual_response
-        }
-
-        print_error(error_message_in_json)
-
-
-def print_success_message(preservica_website: Website, print_error=print):
-    success_message_in_json = {
-        "Status": "Success",
-        "Website": f"{preservica_website.name}",
-        "Message": f"{preservica_website.name} returned an expected response: {preservica_website.expected_response}"
-    }
-
-    print_error(success_message_in_json)
+        err_msg = (f":alert-noflash-slow: *IP lock check failure*: {website_name} is unexpectedly available.",
+                   f"*Expected Response*: {str(website.expected_response)}",
+                   f"*Actual Response*: {website.actual_response}")
+        detail_message = json.dumps({"message": "\n".join(err_msg)})
+        entries = [{'Source': 'DR2DevMessage', 'DetailType': 'IPLockCheckerSlackMessage', 'Detail': detail_message}]
+        client.put_events(Entries=entries)
 
 
 def get_websites_with_errors(preservica_website: Website, rest_of_the_tested_websites: dict[str, Website]
                              ) -> dict[str, Website]:
     if preservica_website.received_expected_response:
         any_other_website_received_unexpected_response = {
-            website for website in rest_of_the_tested_websites.values() if not website.received_expected_response
+            name: website for name, website in rest_of_the_tested_websites.items()
+            if not website.received_expected_response
         }
 
         if any_other_website_received_unexpected_response:
             print("Preservica website timed out as expected but other test websites did not receive expected response.")
-            return rest_of_the_tested_websites
+            return any_other_website_received_unexpected_response
         return {}
     else:
         return {preservica_website.name: preservica_website}
 
 
-def run_connection_tests(verify_responses_func=verify_responses, print_error_message_func=print_error_message,
-                         print_success_message_func=print_success_message):
+def run_connection_tests(verify_responses_func=verify_responses):
     preservica_website_name = "Preservica"
     websites_to_test_for_expected_responses: dict[str, Website] = {
         preservica_website_name: Website(
@@ -104,7 +93,6 @@ def run_connection_tests(verify_responses_func=verify_responses, print_error_mes
             False,
             None
         ),
-        "www.amazon.co.uk": Website("www.amazon.co.uk", "https://www.amazon.co.uk", 200, False, None),
         "www.nationalarchives.gov.uk": Website(
             "www.nationalarchives.gov.uk", "https://www.nationalarchives.gov.uk", 200, False, None
         )
@@ -116,10 +104,7 @@ def run_connection_tests(verify_responses_func=verify_responses, print_error_mes
     websites_to_log_error_msgs_for: dict[str, Website] = get_websites_with_errors(preservica_website,
                                                                                   rest_of_the_tested_websites)
 
-    if websites_to_log_error_msgs_for:
-        print_error_message_func(websites_to_log_error_msgs_for)
-    else:
-        print_success_message_func(preservica_website)
+    send_error_messages_to_eventbridge(websites_to_log_error_msgs_for)
 
 
 def lambda_handler(event, context):
