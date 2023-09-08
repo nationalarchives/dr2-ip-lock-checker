@@ -31,7 +31,17 @@ class TestIpLockChecker(unittest.TestCase):
     events_client = boto3.client("events", region_name="eu-west-2")
     sqs_client = boto3.client("sqs", region_name="eu-west-2")
 
+    @staticmethod
+    def set_aws_credentials():
+        """Mocked AWS Credentials for moto."""
+        os.environ['AWS_ACCESS_KEY_ID'] = 'testing'
+        os.environ['AWS_SECRET_ACCESS_KEY'] = 'testing'
+        os.environ['AWS_SECURITY_TOKEN'] = 'testing'
+        os.environ['AWS_SESSION_TOKEN'] = 'testing'
+        os.environ['AWS_DEFAULT_REGION'] = 'eu-west-2'
+
     def create_sqs_queue_and_rule(self):
+        self.set_aws_credentials()
         self.events_client.put_rule(Name='test-rule', EventPattern='{"source": ["DR2DevMessage"]}')
         attributes = {'FifoQueue': 'true', 'ContentBasedDeduplication': 'true'}
         sqs_queue = self.sqs_client.create_queue(QueueName='test-queue.fifo', Attributes=attributes)
@@ -41,10 +51,12 @@ class TestIpLockChecker(unittest.TestCase):
         return sqs_queue['QueueUrl']
 
     def delete_queue_messages(self, queue_url, receipt_handles):
+        self.set_aws_credentials()
         for receipt_handle in receipt_handles:
             self.sqs_client.delete_message(QueueUrl=queue_url, ReceiptHandle=receipt_handle)
 
     def get_queue_messages(self, queue_url):
+        self.set_aws_credentials()
         messages = []
 
         def process_msg(msg):
