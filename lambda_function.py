@@ -77,8 +77,7 @@ def get_websites_with_errors(preservica_website: Website, rest_of_the_tested_web
 
         if any_other_website_received_unexpected_response:
             print("Preservica website timed out as expected but other test websites did not receive expected response.")
-            return any_other_website_received_unexpected_response
-        return {}
+        return any_other_website_received_unexpected_response
     else:
         return {preservica_website.name: preservica_website}
 
