@@ -2,7 +2,7 @@ import os
 import unittest
 import json
 from unittest.mock import Mock
-from moto import mock_events, mock_sqs
+from moto import mock_aws
 import boto3
 from urllib3.exceptions import ConnectTimeoutError
 
@@ -25,8 +25,7 @@ def generate_list_of_websites():
     }
 
 
-@mock_sqs
-@mock_events
+@mock_aws
 class TestIpLockChecker(unittest.TestCase):
     events_client = boto3.client("events",
                                  region_name="eu-west-2",
