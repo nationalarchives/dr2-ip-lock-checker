@@ -20,7 +20,7 @@ permissions:
   contents: write
 jobs:
   deploy:
-    uses: nationalarchives/dr2-github-actions/.github/workflows/lambda_deploy.yml@main
+    uses: nationalarchives/dr2-github-actions/.github/workflows/lambda_deploy.yml@917201e254f112ff041b952dae76ef767cae7378
     with:
       lambda-name: ${{ github.event.inputs.environment }}-dr2-ip-lock-checker
       deployment-package: ip_lock_checker_lambda.zip

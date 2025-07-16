@@ -9,7 +9,7 @@ permissions:
   contents: read
 jobs:
   test:
-    uses: nationalarchives/dr2-github-actions/.github/workflows/dr2_test.yml@main
+    uses: nationalarchives/dr2-github-actions/.github/workflows/dr2_test.yml@917201e254f112ff041b952dae76ef767cae7378
     with:
       repo-name: dr2-ip-lock-checker
       test-command: |
