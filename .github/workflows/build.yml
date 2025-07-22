@@ -8,7 +8,7 @@ permissions:
   contents: write
 jobs:
   pre-deploy:
-    uses: nationalarchives/dr2-github-actions/.github/workflows/lambda_build.yml@main
+    uses: nationalarchives/dr2-github-actions/.github/workflows/lambda_build.yml@917201e254f112ff041b952dae76ef767cae7378
     with:
       repo-name: dr2-ip-lock-checker
       artifact-name: ip_lock_checker_lambda
@@ -28,7 +28,7 @@ jobs:
     needs: pre-deploy
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@09d2acae674a48949e3602304ab46fd20ae0c42f
       - run: gh workflow run deploy.yml -f environment=intg -f to-deploy=${{ needs.pre-deploy.outputs.next-version }}
         env:
           GITHUB_TOKEN: ${{ secrets.WORKFLOW_TOKEN }}
