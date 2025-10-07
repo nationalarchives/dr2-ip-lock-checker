@@ -62,8 +62,8 @@ def send_error_messages_to_eventbridge(websites: dict[str, Website]):
         err_msg = (f":alert-noflash-slow: *IP lock check failure*: {website_name} is unexpectedly available.",
                    f"*Expected Response*: {str(website.expected_response)}",
                    f"*Actual Response*: {website.actual_response}")
-        detail_message = json.dumps({"message": "\n".join(err_msg)})
-        entries = [{'Source': 'DR2DevMessage', 'DetailType': 'IPLockCheckerSlackMessage', 'Detail': detail_message}]
+        detail_message = json.dumps({"slackMessage": "\n".join(err_msg)})
+        entries = [{'Source': 'IPLockCheckerSlackMessage', 'DetailType': 'DR2DevMessage', 'Detail': detail_message}]
         client.put_events(Entries=entries)
 
 

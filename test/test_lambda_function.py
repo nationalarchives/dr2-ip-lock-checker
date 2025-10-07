@@ -49,7 +49,7 @@ class TestIpLockChecker(unittest.TestCase):
 
     def create_sqs_queue_and_rule(self):
         self.set_aws_credentials()
-        self.events_client.put_rule(Name='test-rule', EventPattern='{"source": ["DR2DevMessage"]}')
+        self.events_client.put_rule(Name='test-rule', EventPattern='{"detail-type": ["DR2DevMessage"]}')
         attributes = {'FifoQueue': 'true', 'ContentBasedDeduplication': 'true'}
         sqs_queue = self.sqs_client.create_queue(QueueName='test-queue.fifo', Attributes=attributes)
         target = {'Id': 'id', 'Arn': 'arn:aws:sqs:eu-west-2:123456789012:test-queue.fifo',
@@ -67,7 +67,10 @@ class TestIpLockChecker(unittest.TestCase):
         messages = []
 
         def process_msg(msg):
-            return {'ReceiptHandle': msg['ReceiptHandle'], 'ErrorMessage': json.loads(msg['Body'])['detail']['message']}
+            return {
+                'ReceiptHandle': msg['ReceiptHandle'],
+                'ErrorMessage': json.loads(msg['Body'])['detail']['slackMessage']
+            }
 
         msgs_response = self.sqs_client.receive_message(QueueUrl=queue_url, MaxNumberOfMessages=10)
 
