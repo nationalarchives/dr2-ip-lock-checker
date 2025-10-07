@@ -16,7 +16,7 @@ def generate_list_of_websites():
         "Preservica_mock_website": Website(
             "Preservica_mock_website",
             "https://mockPreservicaWebsite.net",
-            ConnectTimeoutError(),
+            403,
             False,
             None
         ),
@@ -116,8 +116,10 @@ class TestIpLockChecker(unittest.TestCase):
         http = Mock()
         response = BaseHTTPResponse()
         response.status = 200
+        forbidden_response = BaseHTTPResponse()
+        forbidden_response.status = 403
         http.request = Mock()
-        http.request.side_effect = [ConnectTimeoutError(), response, response]
+        http.request.side_effect = [forbidden_response, response, response]
 
         initial_list_of_websites = generate_list_of_websites()
 
@@ -125,9 +127,9 @@ class TestIpLockChecker(unittest.TestCase):
             "Preservica_mock_website": Website(
                 "Preservica_mock_website",
                 "https://mockPreservicaWebsite.net",
-                "Connection timeout",
+                403,
                 True,
-                "Connection timeout"
+                "403"
             ),
             "website2": Website("website2", "https://mockWebsite2.com", 200, True, "200"),
             "website3": Website("website3", "https://mockWebsite3.com", 200, True, "200")
@@ -157,7 +159,7 @@ class TestIpLockChecker(unittest.TestCase):
             "Preservica_mock_website": Website(
                 "Preservica_mock_website",
                 "https://mockPreservicaWebsite.net",
-                "Connection timeout",
+                403,
                 False,
                 str(200)
             ),
