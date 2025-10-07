@@ -59,7 +59,8 @@ def verify_responses(website_to_test_expected_responses: dict[str, Website],
 
 def send_error_messages_to_eventbridge(websites: dict[str, Website]):
     for website_name, website in websites.items():
-        err_msg = (f":alert-noflash-slow: *IP lock check failure*: {website_name} is unexpectedly available.",
+        prefix = "un" if website.expected_response == 200 else ""
+        err_msg = (f":alert-noflash-slow: *IP lock check failure*: {website_name} is unexpectedly {prefix}available.",
                    f"*Expected Response*: {str(website.expected_response)}",
                    f"*Actual Response*: {website.actual_response}")
         detail_message = json.dumps({"slackMessage": "\n".join(err_msg)})

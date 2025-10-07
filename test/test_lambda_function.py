@@ -81,8 +81,8 @@ class TestIpLockChecker(unittest.TestCase):
         return messages
 
     @staticmethod
-    def generate_expected_error_message(site_name, expected_response, actual_response):
-        return "\n".join((f":alert-noflash-slow: *IP lock check failure*: {site_name} is unexpectedly available.",
+    def generate_expected_error_message(site_name, expected_response, actual_response, prefix="un"):
+        return "\n".join((f":alert-noflash-slow: *IP lock check failure*: {site_name} is unexpectedly {prefix}available.",
                           f"*Expected Response*: {expected_response}",
                           f"*Actual Response*: {actual_response}"))
 
@@ -303,7 +303,7 @@ class TestIpLockChecker(unittest.TestCase):
         msgs_response = self.get_queue_messages(queue_url)
 
         self.assertEqual(len(msgs_response), 1)
-        expected_msg = self.generate_expected_error_message("Preservica", "expected response", "200")
+        expected_msg = self.generate_expected_error_message("Preservica", "expected response", "200", prefix="")
         self.assertEqual(msgs_response[0]['ErrorMessage'], expected_msg)
         self.delete_queue_messages(queue_url, [msg['ReceiptHandle'] for msg in msgs_response])
 
