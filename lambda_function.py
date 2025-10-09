@@ -37,18 +37,8 @@ def verify_responses(website_to_test_expected_responses: dict[str, Website],
         expected_response = website.expected_response
 
         match expected_response:
-            case ConnectTimeoutError():
-                website.expected_response = "Connection timeout"
-                http_status: int | Exception = get_response(request, website.url)
-                if type(http_status) == ConnectTimeoutError:
-                    website.received_expected_response = True
-                    website.actual_response = website.expected_response
-
-                else:
-                    website.received_expected_response = False
-                    website.actual_response = str(http_status)
             case int():
-                http_status: int | Exception = get_response(request, website.url)
+                http_status: int = get_response(request, website.url)
                 website.received_expected_response = http_status == website.expected_response
                 website.actual_response = str(http_status)
             case _:
@@ -59,11 +49,12 @@ def verify_responses(website_to_test_expected_responses: dict[str, Website],
 
 def send_error_messages_to_eventbridge(websites: dict[str, Website]):
     for website_name, website in websites.items():
-        err_msg = (f":alert-noflash-slow: *IP lock check failure*: {website_name} is unexpectedly available.",
+        prefix = "un" if website.expected_response == 200 else ""
+        err_msg = (f":alert-noflash-slow: *IP lock check failure*: {website_name} is unexpectedly {prefix}available.",
                    f"*Expected Response*: {str(website.expected_response)}",
                    f"*Actual Response*: {website.actual_response}")
-        detail_message = json.dumps({"message": "\n".join(err_msg)})
-        entries = [{'Source': 'DR2DevMessage', 'DetailType': 'IPLockCheckerSlackMessage', 'Detail': detail_message}]
+        detail_message = json.dumps({"slackMessage": "\n".join(err_msg)})
+        entries = [{'Source': 'IPLockCheckerSlackMessage', 'DetailType': 'DR2DevMessage', 'Detail': detail_message}]
         client.put_events(Entries=entries)
 
 
@@ -88,7 +79,7 @@ def run_connection_tests(verify_responses_func=verify_responses):
         preservica_website_name: Website(
             preservica_website_name,
             os.environ["PRESERVICA_URL"],
-            ConnectTimeoutError(),
+            403,
             False,
             None
         ),

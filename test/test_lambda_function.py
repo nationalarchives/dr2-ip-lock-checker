@@ -16,7 +16,7 @@ def generate_list_of_websites():
         "Preservica_mock_website": Website(
             "Preservica_mock_website",
             "https://mockPreservicaWebsite.net",
-            ConnectTimeoutError(),
+            403,
             False,
             None
         ),
@@ -49,7 +49,7 @@ class TestIpLockChecker(unittest.TestCase):
 
     def create_sqs_queue_and_rule(self):
         self.set_aws_credentials()
-        self.events_client.put_rule(Name='test-rule', EventPattern='{"source": ["DR2DevMessage"]}')
+        self.events_client.put_rule(Name='test-rule', EventPattern='{"detail-type": ["DR2DevMessage"]}')
         attributes = {'FifoQueue': 'true', 'ContentBasedDeduplication': 'true'}
         sqs_queue = self.sqs_client.create_queue(QueueName='test-queue.fifo', Attributes=attributes)
         target = {'Id': 'id', 'Arn': 'arn:aws:sqs:eu-west-2:123456789012:test-queue.fifo',
@@ -67,7 +67,10 @@ class TestIpLockChecker(unittest.TestCase):
         messages = []
 
         def process_msg(msg):
-            return {'ReceiptHandle': msg['ReceiptHandle'], 'ErrorMessage': json.loads(msg['Body'])['detail']['message']}
+            return {
+                'ReceiptHandle': msg['ReceiptHandle'],
+                'ErrorMessage': json.loads(msg['Body'])['detail']['slackMessage']
+            }
 
         msgs_response = self.sqs_client.receive_message(QueueUrl=queue_url, MaxNumberOfMessages=10)
 
@@ -78,8 +81,8 @@ class TestIpLockChecker(unittest.TestCase):
         return messages
 
     @staticmethod
-    def generate_expected_error_message(site_name, expected_response, actual_response):
-        return "\n".join((f":alert-noflash-slow: *IP lock check failure*: {site_name} is unexpectedly available.",
+    def generate_expected_error_message(site_name, expected_response, actual_response, prefix="un"):
+        return "\n".join((f":alert-noflash-slow: *IP lock check failure*: {site_name} is unexpectedly {prefix}available.",
                           f"*Expected Response*: {expected_response}",
                           f"*Actual Response*: {actual_response}"))
 
@@ -113,8 +116,10 @@ class TestIpLockChecker(unittest.TestCase):
         http = Mock()
         response = BaseHTTPResponse()
         response.status = 200
+        forbidden_response = BaseHTTPResponse()
+        forbidden_response.status = 403
         http.request = Mock()
-        http.request.side_effect = [ConnectTimeoutError(), response, response]
+        http.request.side_effect = [forbidden_response, response, response]
 
         initial_list_of_websites = generate_list_of_websites()
 
@@ -122,9 +127,9 @@ class TestIpLockChecker(unittest.TestCase):
             "Preservica_mock_website": Website(
                 "Preservica_mock_website",
                 "https://mockPreservicaWebsite.net",
-                "Connection timeout",
+                403,
                 True,
-                "Connection timeout"
+                "403"
             ),
             "website2": Website("website2", "https://mockWebsite2.com", 200, True, "200"),
             "website3": Website("website3", "https://mockWebsite3.com", 200, True, "200")
@@ -154,7 +159,7 @@ class TestIpLockChecker(unittest.TestCase):
             "Preservica_mock_website": Website(
                 "Preservica_mock_website",
                 "https://mockPreservicaWebsite.net",
-                "Connection timeout",
+                403,
                 False,
                 str(200)
             ),
@@ -300,7 +305,7 @@ class TestIpLockChecker(unittest.TestCase):
         msgs_response = self.get_queue_messages(queue_url)
 
         self.assertEqual(len(msgs_response), 1)
-        expected_msg = self.generate_expected_error_message("Preservica", "expected response", "200")
+        expected_msg = self.generate_expected_error_message("Preservica", "expected response", "200", prefix="")
         self.assertEqual(msgs_response[0]['ErrorMessage'], expected_msg)
         self.delete_queue_messages(queue_url, [msg['ReceiptHandle'] for msg in msgs_response])
 
